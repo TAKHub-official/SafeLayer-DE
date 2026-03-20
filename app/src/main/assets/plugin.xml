@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SafeLayer-DE plugin descriptor. Release version is documented in gradle.properties as plugin.version=1.0.0. -->
+<plugin>
+
+    <extension
+        type="gov.tak.api.plugin.IPlugin"
+        impl="com.takhub.safelayerde.plugin.SafeLayerPlugin"
+        singleton="true" />
+
+</plugin>

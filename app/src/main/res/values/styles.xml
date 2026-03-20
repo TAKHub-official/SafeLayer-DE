@@ -1,0 +1,93 @@
+<resources>
+
+    <style name="ATAKPluginTheme" parent="@android:style/Theme.Holo">
+        <item name="android:textAppearanceLargePopupMenu">@style/PopupMenuTextAppearance</item>
+        <item name="android:buttonStyle">@android:style/Widget.Button</item>
+        <item name="android:imageButtonStyle">@android:style/Widget.Button</item>
+        <item name="android:buttonStyleToggle">@android:style/Widget.Button</item>
+        <item name="android:spinnerStyle">@style/ATAKSpinner</item>
+        <item name="android:spinnerItemStyle">@style/ATAKSpinnerItem</item>
+        <item name="android:spinnerDropDownItemStyle">@style/ATAKSpinnerDropDownItem</item>
+        <item name="android:editTextStyle">@style/ATAKEditText</item>
+    </style>
+
+    <style name="AppTheme" parent="@android:style/Theme.Holo">
+        <item name="android:buttonStyle">@android:style/Widget.Button</item>
+        <item name="android:imageButtonStyle">@android:style/Widget.Button</item>
+        <item name="android:buttonStyleToggle">@android:style/Widget.Button</item>
+        <item name="android:spinnerStyle">@style/ATAKSpinner</item>
+        <item name="android:spinnerItemStyle">@style/ATAKSpinnerItem</item>
+        <item name="android:editTextStyle">@style/ATAKEditText</item>
+    </style>
+
+    <style name="ATAKSpinner" parent="@android:style/Widget.Spinner">
+        <item name="android:spinnerMode">dialog</item>
+    </style>
+
+    <style name="ATAKEditText" parent="@android:style/Widget.EditText">
+        <item name="android:imeOptions">flagNoFullscreen</item>
+    </style>
+
+    <style name="ATAKSpinnerItem">
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:dropDownVerticalOffset">0dip</item>
+        <item name="android:dropDownHorizontalOffset">0dip</item>
+        <item name="android:dropDownWidth">wrap_content</item>
+        <item name="android:gravity">left|center_vertical</item>
+    </style>
+
+    <style name="ATAKSpinnerDropDownItem" parent="@style/ATAKSpinnerItem">
+        <item name="android:paddingStart">@dimen/auto_margin</item>
+    </style>
+
+    <style name="PopupMenuTextAppearance" parent="android:TextAppearance.Large">
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <style name="SafeLayerToggleButton" parent="@android:style/Widget.Button.Toggle">
+        <item name="android:minHeight">40dp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+    </style>
+
+    <style name="SafeLayerLayerSwitch">
+        <item name="android:minHeight">32dp</item>
+        <item name="android:switchMinWidth">56dp</item>
+        <item name="android:switchPadding">0dp</item>
+        <item name="android:showText">false</item>
+        <item name="android:splitTrack">false</item>
+        <item name="android:thumb">@drawable/bg_layer_switch_thumb</item>
+        <item name="android:track">@drawable/bg_layer_switch_track</item>
+    </style>
+
+    <style name="SafeLayerTabButton" parent="@android:style/Widget.Button">
+        <item name="android:background">@drawable/bg_tab_navigation</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+    </style>
+
+    <style name="SafeLayerActionButton" parent="@android:style/Widget.Button">
+        <item name="android:minHeight">40dp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingLeft">12dp</item>
+        <item name="android:paddingRight">12dp</item>
+    </style>
+
+    <style name="SafeLayerInfoButton" parent="@android:style/Widget.ImageButton">
+        <item name="android:background">@drawable/bg_help_info_button</item>
+        <item name="android:minWidth">48dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:scaleType">centerInside</item>
+    </style>
+
+</resources>

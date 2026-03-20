@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#ffffff</color>
+    <color name="safelayer_tab_inactive">#3C4955</color>
+    <color name="safelayer_tab_active">#5B6976</color>
+    <color name="safelayer_tab_pressed">#4A5865</color>
+    <color name="safelayer_tab_stroke">#7A8792</color>
+    <color name="safelayer_toggle_inactive">#707E8A</color>
+    <color name="safelayer_toggle_bbk_active">#B53131</color>
+    <color name="safelayer_toggle_dwd_active">#C57F12</color>
+    <color name="safelayer_toggle_radar_active">#0D596B</color>
+    <color name="safelayer_switch_track_inactive">#56636E</color>
+    <color name="safelayer_switch_track_active">#6F8794</color>
+    <color name="safelayer_switch_thumb">#E8EDF1</color>
+    <color name="safelayer_detail_back_active">#4A5865</color>
+    <color name="safelayer_detail_back_pressed">#3D4A55</color>
+    <color name="color_severity_extreme">#CC0000</color>
+    <color name="color_severity_severe">#FF4500</color>
+    <color name="color_severity_moderate">#FF8C00</color>
+    <color name="color_severity_minor">#FFD700</color>
+    <color name="color_severity_unknown">#808080</color>
+</resources>
