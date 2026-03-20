@@ -23,6 +23,8 @@ import java.util.Map;
 public class RadarLayerFactory {
 
     private static final String TAG = "SafeLayerRadar";
+    private static final int OVERLAY_STROKE_COLOR_TRANSPARENT = 0x00000000;
+    private static final double OVERLAY_STROKE_WEIGHT_NONE = 0D;
     private static final byte[] PNG_SIGNATURE = new byte[]{
             (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
     };
@@ -162,7 +164,7 @@ public class RadarLayerFactory {
     }
 
     protected boolean shouldUseCustomRenderer(RadarRenderSpec spec) {
-        return false;
+        return true;
     }
 
     protected Object createDatasetDescriptor(RadarRenderSpec spec, File imageFile) {
@@ -384,13 +386,13 @@ public class RadarLayerFactory {
                 "setStrokeColor",
                 spec,
                 new Class<?>[]{int.class},
-                0xFFFFFFFF);
+                OVERLAY_STROKE_COLOR_TRANSPARENT);
         invokeOptionalMethod(
                 overlay,
                 "setStrokeWeight",
                 spec,
                 new Class<?>[]{double.class},
-                1D);
+                OVERLAY_STROKE_WEIGHT_NONE);
         invokeOptionalMethod(
                 overlay,
                 "enableMapTouch",
