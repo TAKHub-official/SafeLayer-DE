@@ -12,11 +12,13 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class OperationalAreaArsResolver {
 
     private static final String PREF_NAME = "safelayer.operational_area";
     private static final String PREF_KEY_ARS_SET = "last_ars_set";
+    private static final Pattern ARS_PATTERN = Pattern.compile("^\\d{12}$");
 
     private static final Map<String, RegionDefinition> REGIONS = createRegions();
 
@@ -42,6 +44,11 @@ public class OperationalAreaArsResolver {
             }
         }
         return sanitize(arsSetStore.read());
+    }
+
+    public static boolean isValidArs(String value) {
+        String normalizedValue = value == null ? null : value.trim();
+        return normalizedValue != null && ARS_PATTERN.matcher(normalizedValue).matches();
     }
 
     static Set<String> resolveBufferedArsSet(double latitude, double longitude) {
@@ -76,8 +83,8 @@ public class OperationalAreaArsResolver {
 
         LinkedHashSet<String> sanitized = new LinkedHashSet<>();
         for (String ars : arsSet) {
-            if (ars != null && !ars.trim().isEmpty()) {
-                sanitized.add(ars);
+            if (isValidArs(ars)) {
+                sanitized.add(ars.trim());
             }
         }
         return Collections.unmodifiableSet(sanitized);
@@ -213,7 +220,7 @@ public class OperationalAreaArsResolver {
 
             LinkedHashSet<String> arsSet = new LinkedHashSet<>();
             for (String ars : joined.split(",")) {
-                if (ars != null && !ars.trim().isEmpty()) {
+                if (isValidArs(ars)) {
                     arsSet.add(ars.trim());
                 }
             }
@@ -233,7 +240,7 @@ public class OperationalAreaArsResolver {
         private String join(Set<String> arsSet) {
             StringBuilder builder = new StringBuilder();
             for (String ars : arsSet) {
-                if (ars == null || ars.trim().isEmpty()) {
+                if (!isValidArs(ars)) {
                     continue;
                 }
                 if (builder.length() > 0) {

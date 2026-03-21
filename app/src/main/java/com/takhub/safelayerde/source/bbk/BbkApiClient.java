@@ -2,8 +2,10 @@ package com.takhub.safelayerde.source.bbk;
 
 import android.util.Log;
 
+import com.takhub.safelayerde.plugin.OperationalAreaArsResolver;
 import com.takhub.safelayerde.plugin.SafeLayerConstants;
 import com.takhub.safelayerde.source.common.HttpClient;
+import com.takhub.safelayerde.source.common.HttpClient.RemoteEndpointPolicy;
 import com.takhub.safelayerde.util.JsonUtils;
 
 import org.json.JSONArray;
@@ -11,27 +13,30 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class BbkApiClient {
 
     private static final String TAG = "SafeLayerBbkApi";
     private static final String REGIONAL_DISCOVERY_ENDPOINT_TEMPLATE = "dashboard/%s.json";
+    private static final Pattern WARNING_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._~-]+$");
 
     private final HttpClient httpClient;
-    private final String baseUrl;
+    private final RemoteEndpointPolicy endpointPolicy;
 
-    public BbkApiClient(HttpClient httpClient, String baseUrl) {
+    public BbkApiClient(HttpClient httpClient) {
+        this(httpClient, SafeLayerConstants.BBK_API_ENDPOINT);
+    }
+
+    BbkApiClient(HttpClient httpClient, RemoteEndpointPolicy endpointPolicy) {
         this.httpClient = httpClient;
-        this.baseUrl = trimTrailingSlash(baseUrl);
+        this.endpointPolicy = endpointPolicy;
     }
 
     public FetchResult<JSONArray> fetchDiscovery(String ars) {
@@ -39,8 +44,8 @@ public class BbkApiClient {
             String endpoint = String.format(
                     Locale.ROOT,
                     REGIONAL_DISCOVERY_ENDPOINT_TEMPLATE,
-                    encodePathSegment("ARS", ars));
-            return FetchResult.success(new JSONArray(httpClient.fetchString(baseUrl + "/" + endpoint)));
+                    validateArs(ars));
+            return FetchResult.success(new JSONArray(httpClient.fetchString(resolveEndpoint(endpoint))));
         } catch (IOException | JSONException exception) {
             String message = "Failed to fetch BBK discovery for ARS " + ars;
             logError(message, exception);
@@ -50,7 +55,8 @@ public class BbkApiClient {
 
     public DiscoveryBatchResult fetchNationalDiscovery() {
         try {
-            JSONArray response = new JSONArray(httpClient.fetchString(baseUrl + "/" + SafeLayerConstants.BBK_MOWAS_MAPDATA_PATH));
+            JSONArray response = new JSONArray(httpClient.fetchString(
+                    endpointPolicy.resolve(SafeLayerConstants.BBK_MOWAS_MAPDATA_PATH)));
             LinkedHashMap<String, DiscoveryEntry> merged = new LinkedHashMap<>();
             for (int index = 0; index < response.length(); index++) {
                 JSONObject entry = response.optJSONObject(index);
@@ -79,7 +85,7 @@ public class BbkApiClient {
     public FetchResult<JSONObject> fetchDetail(String warningId) {
         try {
             return FetchResult.success(new JSONObject(httpClient.fetchString(
-                    baseUrl + "/warnings/" + encodePathSegment("warningId", warningId) + ".json")));
+                    resolveEndpoint("warnings/" + validateWarningId(warningId) + ".json"))));
         } catch (IOException | JSONException exception) {
             String message = "Failed to fetch BBK detail for warning " + warningId;
             logError(message, exception);
@@ -90,7 +96,7 @@ public class BbkApiClient {
     public FetchResult<String> fetchGeoJson(String warningId) {
         try {
             return FetchResult.success(httpClient.fetchString(
-                    baseUrl + "/warnings/" + encodePathSegment("warningId", warningId) + ".geojson"));
+                    resolveEndpoint("warnings/" + validateWarningId(warningId) + ".geojson")));
         } catch (IOException exception) {
             String message = "Failed to fetch BBK GeoJSON for warning " + warningId;
             logError(message, exception);
@@ -140,24 +146,33 @@ public class BbkApiClient {
         return new DiscoveryBatchResult(merged, failedArs, successfulArs);
     }
 
-    private String trimTrailingSlash(String value) {
-        if (value == null || value.isEmpty()) {
-            return "";
-        }
-        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    HttpClient.RemoteRequest resolveEndpoint(String relativePath) throws IOException {
+        return endpointPolicy.resolve(relativePath);
     }
 
-    private String encodePathSegment(String label, String rawValue) throws IOException {
+    private String validateArs(String rawValue) throws IOException {
         String normalizedValue = rawValue == null ? null : rawValue.trim();
         if (normalizedValue == null || normalizedValue.isEmpty()) {
-            throw new IOException(label + " must not be empty.");
+            throw new IOException("ARS must not be empty.");
         }
-        try {
-            return URLEncoder.encode(normalizedValue, StandardCharsets.UTF_8.name())
-                    .replace("+", "%20");
-        } catch (UnsupportedEncodingException exception) {
-            throw new IOException("Failed to encode " + label + ".", exception);
+        if (!OperationalAreaArsResolver.isValidArs(normalizedValue)) {
+            throw new IOException("ARS must use the 12-digit format.");
         }
+        return normalizedValue;
+    }
+
+    private String validateWarningId(String rawValue) throws IOException {
+        String normalizedValue = rawValue == null ? null : rawValue.trim();
+        if (normalizedValue == null || normalizedValue.isEmpty()) {
+            throw new IOException("warningId must not be empty.");
+        }
+        if (".".equals(normalizedValue) || "..".equals(normalizedValue)) {
+            throw new IOException("warningId dot segments are not allowed.");
+        }
+        if (!WARNING_ID_PATTERN.matcher(normalizedValue).matches()) {
+            throw new IOException("warningId contains invalid characters.");
+        }
+        return normalizedValue;
     }
 
     private void logError(String message, Throwable throwable) {

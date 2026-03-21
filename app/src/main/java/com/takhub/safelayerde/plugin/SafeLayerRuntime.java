@@ -237,12 +237,11 @@ public class SafeLayerRuntime {
 
     DwdCapWarningSource createDwdWarningSource(HttpClient httpClient, CacheStore cacheStore) {
         return new DwdCapWarningSource(
-                new DwdCapZipFetcher(httpClient),
+                new DwdCapZipFetcher(httpClient, SafeLayerConstants.DWD_CAP_DIRECTORY_ENDPOINT.baseRequest()),
                 new DwdCapParser(),
                 new DwdCapNormalizer(),
                 cacheStore,
-                new SourceClock(),
-                SafeLayerConstants.DWD_CAP_COMMUNEUNION_LATEST_DIRECTORY_URL);
+                new SourceClock());
     }
 
     BbkWarningSource createBbkWarningSource(
@@ -250,7 +249,7 @@ public class SafeLayerRuntime {
             CacheStore cacheStore,
             final OperationalAreaArsResolver arsResolver) {
         return new BbkWarningSource(
-                new BbkApiClient(httpClient, SafeLayerConstants.BBK_BASE_URL),
+                new BbkApiClient(httpClient),
                 new BbkNormalizer(),
                 new BbkGeoJsonParser(),
                 new WarningDiffService(),

@@ -11,6 +11,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import java.io.IOException;
 import java.io.StringReader;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -25,18 +26,27 @@ import javax.xml.parsers.DocumentBuilderFactory;
 
 public class DwdCapParser {
 
+    private static final String DISALLOW_DOCTYPE_FEATURE =
+            "http://apache.org/xml/features/disallow-doctype-decl";
+    private static final String EXTERNAL_GENERAL_ENTITIES_FEATURE =
+            "http://xml.org/sax/features/external-general-entities";
+    private static final String EXTERNAL_PARAMETER_ENTITIES_FEATURE =
+            "http://xml.org/sax/features/external-parameter-entities";
+    private static final String LOAD_EXTERNAL_DTD_FEATURE =
+            "http://apache.org/xml/features/nonvalidating/load-external-dtd";
+
     public ParsedAlert parse(String xml) throws Exception {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setNamespaceAware(true);
-        trySetXIncludeAware(factory, false);
-        factory.setExpandEntityReferences(false);
-        trySetFeature(factory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
-        trySetFeature(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
-        trySetFeature(factory, "http://xml.org/sax/features/external-general-entities", false);
-        trySetFeature(factory, "http://xml.org/sax/features/external-parameter-entities", false);
-        trySetFeature(factory, "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        rejectUnsafeXmlConstructs(xml);
+        DocumentBuilderFactory factory = newDocumentBuilderFactory();
+        configureSecureParsing(factory);
 
         javax.xml.parsers.DocumentBuilder documentBuilder = factory.newDocumentBuilder();
+        documentBuilder.setEntityResolver(new org.xml.sax.EntityResolver() {
+            @Override
+            public InputSource resolveEntity(String publicId, String systemId) throws SAXException {
+                throw new SAXException("External entity resolution is disabled.");
+            }
+        });
         documentBuilder.setErrorHandler(new org.xml.sax.ErrorHandler() {
             @Override
             public void warning(org.xml.sax.SAXParseException exception) {
@@ -71,19 +81,45 @@ public class DwdCapParser {
         return parsedAlert;
     }
 
-    private void trySetFeature(DocumentBuilderFactory factory, String feature, boolean value) {
-        try {
-            factory.setFeature(feature, value);
-        } catch (Exception ignored) {
-            // Android XML implementations differ between test and runtime.
+    private void rejectUnsafeXmlConstructs(String xml) throws IOException {
+        String normalizedXml = xml == null ? "" : xml.toUpperCase(Locale.US);
+        if (normalizedXml.contains("<!DOCTYPE") || normalizedXml.contains("<!ENTITY")) {
+            throw new IOException("Unsafe XML declarations are not allowed in DWD CAP entries.");
         }
     }
 
-    private void trySetXIncludeAware(DocumentBuilderFactory factory, boolean value) {
+    protected DocumentBuilderFactory newDocumentBuilderFactory() {
+        return DocumentBuilderFactory.newInstance();
+    }
+
+    private void configureSecureParsing(DocumentBuilderFactory factory) {
+        factory.setNamespaceAware(true);
+        trySetXIncludeAware(factory, false);
+        factory.setExpandEntityReferences(false);
+        trySetFeature(factory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        trySetFeature(factory, DISALLOW_DOCTYPE_FEATURE, true);
+        trySetFeature(factory, EXTERNAL_GENERAL_ENTITIES_FEATURE, false);
+        trySetFeature(factory, EXTERNAL_PARAMETER_ENTITIES_FEATURE, false);
+        trySetFeature(factory, LOAD_EXTERNAL_DTD_FEATURE, false);
+    }
+
+    protected boolean trySetFeature(DocumentBuilderFactory factory, String feature, boolean value) {
+        try {
+            factory.setFeature(feature, value);
+            return true;
+        } catch (Exception ignored) {
+            // Android XML implementations differ between test and runtime.
+            return false;
+        }
+    }
+
+    protected boolean trySetXIncludeAware(DocumentBuilderFactory factory, boolean value) {
         try {
             factory.setXIncludeAware(value);
+            return true;
         } catch (RuntimeException ignored) {
             // Android's bundled parser can reject this configuration despite supporting CAP parsing itself.
+            return false;
         }
     }
 

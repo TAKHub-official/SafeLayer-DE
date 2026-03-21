@@ -29,22 +29,35 @@ public class DwdCapZipFetcher {
             Pattern.CASE_INSENSITIVE);
 
     private final HttpClient httpClient;
+    private final HttpClient.RemoteRequest directoryRequest;
 
-    public DwdCapZipFetcher(HttpClient httpClient) {
+    public DwdCapZipFetcher(HttpClient httpClient, HttpClient.RemoteRequest directoryRequest) {
         this.httpClient = httpClient;
+        this.directoryRequest = directoryRequest;
     }
 
-    public FetchResult fetch(String url) throws IOException {
-        ArchiveCandidate selectedArchive = resolveArchive(url);
-        String zipUrl = selectedArchive.resolvedUrl;
-        byte[] zipBytes = httpClient == null ? null : httpClient.fetchBytes(
-                zipUrl,
-                new HttpClient.RedirectValidator() {
-                    @Override
-                    public void validateRedirect(URL fromUrl, URL redirectUrl) throws IOException {
-                        validateArchiveRedirect(selectedArchive.resolvedUrl, fromUrl, redirectUrl);
-                    }
-                });
+    public FetchResult fetch() throws IOException {
+        List<ArchiveCandidate> candidates = resolveArchives();
+        IOException lastFailure = null;
+        for (ArchiveCandidate candidate : candidates) {
+            try {
+                return fetchArchive(candidate);
+            } catch (IOException exception) {
+                lastFailure = exception;
+                SafeLayerDebugLog.w("SafeLayerDwdZip", "archive-skip archive="
+                        + (candidate == null ? "unknown" : candidate.archiveName)
+                        + ", reason="
+                        + exception.getMessage());
+            }
+        }
+        if (lastFailure != null) {
+            throw lastFailure;
+        }
+        throw new IOException("No usable DWD CAP archive found.");
+    }
+
+    private FetchResult fetchArchive(ArchiveCandidate selectedArchive) throws IOException {
+        byte[] zipBytes = httpClient == null ? null : httpClient.fetchBytes(selectedArchive.request);
         if (zipBytes == null || zipBytes.length == 0) {
             throw new IOException("DWD CAP ZIP response was empty.");
         }
@@ -116,21 +129,27 @@ public class DwdCapZipFetcher {
                 failures,
                 selectedArchive.archiveName,
                 selectedArchive.language,
-                selectedArchive.resolvedUrl);
+                selectedArchive.request.getUrlString());
     }
 
-    private ArchiveCandidate resolveArchive(String url) throws IOException {
-        if (url == null || url.trim().isEmpty()) {
+    public String getRequestUrl() {
+        return directoryRequest == null ? null : directoryRequest.getUrlString();
+    }
+
+    private List<ArchiveCandidate> resolveArchives() throws IOException {
+        String url = getRequestUrl();
+        if (directoryRequest == null || url == null || url.trim().isEmpty()) {
             throw new IOException("DWD CAP URL is empty.");
         }
         if (!url.endsWith("/")) {
             ArchiveCandidate directCandidate = ArchiveCandidate.fromHref(url);
             if (directCandidate != null) {
-                return directCandidate.withResolvedUrl(HttpClient.validateUrl(url).toString());
+                return Collections.singletonList(directCandidate.withRequest(directoryRequest));
             }
-            return new ArchiveCandidate(url, "", false, Integer.MAX_VALUE, "unknown", url);
+            return Collections.singletonList(
+                    new ArchiveCandidate(url, "", false, Integer.MAX_VALUE, "unknown", directoryRequest));
         }
-        String html = httpClient == null ? null : httpClient.fetchString(url);
+        String html = httpClient == null ? null : httpClient.fetchString(directoryRequest);
         if (html == null || html.trim().isEmpty()) {
             throw new IOException("DWD CAP directory listing was empty.");
         }
@@ -139,7 +158,7 @@ public class DwdCapZipFetcher {
         Matcher matcher = DIRECTORY_HREF_PATTERN.matcher(html);
         while (matcher.find()) {
             String href = matcher.group(1);
-            ArchiveCandidate candidate = resolveArchiveHref(url, href);
+            ArchiveCandidate candidate = resolveArchiveHref(directoryRequest, href);
             if (candidate != null) {
                 candidates.add(candidate);
             }
@@ -176,10 +195,10 @@ public class DwdCapZipFetcher {
                 + ", selectedLanguage=" + selectedCandidate.language
                 + ", selectedTimestamp=" + selectedCandidate.timestamp
                 + ", candidates=" + summarizeCandidates(candidates));
-        return selectedCandidate;
+        return candidates;
     }
 
-    private ArchiveCandidate resolveArchiveHref(String baseUrl, String href) {
+    private ArchiveCandidate resolveArchiveHref(HttpClient.RemoteRequest baseRequest, String href) {
         if (href == null) {
             return null;
         }
@@ -194,41 +213,12 @@ public class DwdCapZipFetcher {
             return null;
         }
         try {
-            URL normalizedBaseUrl = HttpClient.validateUrl(baseUrl);
-            URL resolvedUrl = new URL(normalizedBaseUrl, normalizedHref);
-            if (!"https".equalsIgnoreCase(resolvedUrl.getProtocol())) {
-                return null;
-            }
-            if (!hasSameOrigin(normalizedBaseUrl, resolvedUrl)) {
-                return null;
-            }
-            return candidate.withResolvedUrl(stripQueryAndFragment(resolvedUrl.toString()));
+            HttpClient.RemoteRequest resolvedRequest =
+                    baseRequest.getPolicy().resolve(baseRequest.getUrl(), normalizedHref);
+            return candidate.withRequest(resolvedRequest);
         } catch (IOException ignored) {
             return null;
         }
-    }
-
-    private boolean hasSameOrigin(URL baseUrl, URL candidateUrl) {
-        if (baseUrl == null || candidateUrl == null) {
-            return false;
-        }
-        return baseUrl.getProtocol().equalsIgnoreCase(candidateUrl.getProtocol())
-                && baseUrl.getHost().equalsIgnoreCase(candidateUrl.getHost())
-                && effectivePort(baseUrl) == effectivePort(candidateUrl);
-    }
-
-    private void validateArchiveRedirect(String archiveUrl, URL fromUrl, URL redirectUrl) throws IOException {
-        URL normalizedArchiveUrl = HttpClient.validateUrl(archiveUrl);
-        if (!hasSameOrigin(normalizedArchiveUrl, fromUrl) || !hasSameOrigin(normalizedArchiveUrl, redirectUrl)) {
-            throw new IOException("DWD CAP archive redirects must stay on the source origin.");
-        }
-    }
-
-    private int effectivePort(URL url) {
-        if (url == null) {
-            return -1;
-        }
-        return url.getPort() >= 0 ? url.getPort() : url.getDefaultPort();
     }
 
     private String summarizeCandidates(List<ArchiveCandidate> candidates) {
@@ -375,7 +365,7 @@ public class DwdCapZipFetcher {
         private final boolean latestAlias;
         private final int languageRank;
         private final String language;
-        private final String resolvedUrl;
+        private final HttpClient.RemoteRequest request;
 
         private ArchiveCandidate(
                 String archiveName,
@@ -383,13 +373,13 @@ public class DwdCapZipFetcher {
                 boolean latestAlias,
                 int languageRank,
                 String language,
-                String resolvedUrl) {
+                HttpClient.RemoteRequest request) {
             this.archiveName = archiveName;
             this.timestamp = timestamp;
             this.latestAlias = latestAlias;
             this.languageRank = languageRank;
             this.language = language;
-            this.resolvedUrl = resolvedUrl;
+            this.request = request;
         }
 
         private static ArchiveCandidate fromHref(String href) {
@@ -415,14 +405,14 @@ public class DwdCapZipFetcher {
                     null);
         }
 
-        private ArchiveCandidate withResolvedUrl(String resolvedUrl) {
+        private ArchiveCandidate withRequest(HttpClient.RemoteRequest request) {
             return new ArchiveCandidate(
                     archiveName,
                     timestamp,
                     latestAlias,
                     languageRank,
                     language,
-                    resolvedUrl);
+                    request);
         }
 
         private static int languageRank(String language) {

@@ -1,5 +1,7 @@
 package com.takhub.safelayerde.cache;
 
+import android.util.Base64;
+
 import com.takhub.safelayerde.util.IoUtils;
 
 import org.json.JSONException;
@@ -12,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -200,9 +201,8 @@ public class CacheIntegrityChecker {
         if (!isIntegrityProtectionEnabled()) {
             return;
         }
-        String encodedSignature = Base64.getEncoder()
-                .withoutPadding()
-                .encodeToString(computeSignature(content, loadOrCreatePrimaryIntegrityKey()));
+        String encodedSignature = encodeBase64NoPadding(
+                computeSignature(content, loadOrCreatePrimaryIntegrityKey()));
         IoUtils.atomicWrite(signatureFile(target), encodedSignature);
     }
 
@@ -265,7 +265,7 @@ public class CacheIntegrityChecker {
             new SecureRandom().nextBytes(generatedKey);
             IoUtils.atomicWrite(
                     keyFile,
-                    Base64.getEncoder().withoutPadding().encodeToString(generatedKey));
+                    encodeBase64NoPadding(generatedKey));
             cachedIntegrityKeys.put(keyPath, generatedKey);
             return generatedKey.clone();
         }
@@ -276,7 +276,47 @@ public class CacheIntegrityChecker {
         if (normalizedSignature == null || normalizedSignature.isEmpty()) {
             throw new IOException("Cache integrity signature is empty.");
         }
-        return Base64.getDecoder().decode(normalizedSignature);
+        try {
+            return Base64.decode(normalizedSignature, Base64.DEFAULT);
+        } catch (RuntimeException exception) {
+            return decodeBase64OnJvm(normalizedSignature, exception);
+        }
+    }
+
+    private String encodeBase64NoPadding(byte[] value) {
+        byte[] normalizedValue = value == null ? new byte[0] : value;
+        try {
+            return Base64.encodeToString(normalizedValue, Base64.NO_WRAP | Base64.NO_PADDING);
+        } catch (RuntimeException exception) {
+            return encodeBase64NoPaddingOnJvm(normalizedValue, exception);
+        }
+    }
+
+    private String encodeBase64NoPaddingOnJvm(byte[] value, RuntimeException originalException) {
+        try {
+            Class<?> base64Class = Class.forName("java.util.Base64");
+            Object encoder = base64Class.getMethod("getEncoder").invoke(null);
+            Object encoderWithoutPadding = encoder.getClass().getMethod("withoutPadding").invoke(encoder);
+            return (String) encoderWithoutPadding.getClass()
+                    .getMethod("encodeToString", byte[].class)
+                    .invoke(encoderWithoutPadding, value);
+        } catch (ReflectiveOperationException reflectionException) {
+            originalException.addSuppressed(reflectionException);
+            throw originalException;
+        }
+    }
+
+    private byte[] decodeBase64OnJvm(String value, RuntimeException originalException) {
+        try {
+            Class<?> base64Class = Class.forName("java.util.Base64");
+            Object decoder = base64Class.getMethod("getDecoder").invoke(null);
+            return (byte[]) decoder.getClass()
+                    .getMethod("decode", String.class)
+                    .invoke(decoder, value);
+        } catch (ReflectiveOperationException reflectionException) {
+            originalException.addSuppressed(reflectionException);
+            throw originalException;
+        }
     }
 
     private File signatureFile(File cacheFile) {

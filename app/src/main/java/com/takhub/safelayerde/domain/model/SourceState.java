@@ -7,23 +7,24 @@ import java.util.regex.Pattern;
 
 public class SourceState {
 
-    private static final String HOSTNAME_TOKEN = "(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+";
-    private static final String IPV4_TOKEN = "(?:\\d{1,3}\\.){3}\\d{1,3}";
-    private static final String IPV6_TOKEN = "(?:\\[[0-9A-Fa-f:.%]+\\]|(?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:.%]+)";
-    private static final String NETWORK_HOST_TOKEN =
-            "(?:" + HOSTNAME_TOKEN + "|" + IPV4_TOKEN + "|" + IPV6_TOKEN + ")";
-    private static final String NETWORK_ENDPOINT_TOKEN =
-            "(?:/?(?:" + HOSTNAME_TOKEN + "/)?" + NETWORK_HOST_TOKEN + "(?::\\d{1,5})?)";
+    private static final String HOSTNAME_PATTERN_PART = "(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+";
+    private static final String IPV4_PATTERN_PART = "(?:\\d{1,3}\\.){3}\\d{1,3}";
+    private static final String IPV6_PATTERN_PART =
+            "(?:\\[[0-9A-Fa-f:.%]+\\]|(?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:.%]+)";
+    private static final String NETWORK_HOST_PATTERN_PART =
+            "(?:" + HOSTNAME_PATTERN_PART + "|" + IPV4_PATTERN_PART + "|" + IPV6_PATTERN_PART + ")";
+    private static final String NETWORK_ENDPOINT_PATTERN_PART =
+            "(?:/?(?:" + HOSTNAME_PATTERN_PART + "/)?" + NETWORK_HOST_PATTERN_PART + "(?::\\d{1,5})?)";
     private static final Pattern URL_PATTERN = Pattern.compile(
             "(?i)\\b(?:https?|file|content|intent|javascript|mailto):\\S+");
     private static final Pattern QUOTED_NETWORK_ENDPOINT_PATTERN = Pattern.compile(
-            "([\"'])(" + NETWORK_ENDPOINT_TOKEN + ")\\1");
+            "([\"'])(" + NETWORK_ENDPOINT_PATTERN_PART + ")\\1");
     private static final Pattern HOST_NETWORK_ENDPOINT_PATTERN = Pattern.compile(
             "(?i)(\\b(?:unable to resolve host|failed to resolve host|unknown host|host)\\s*[\"']?)("
-                    + NETWORK_ENDPOINT_TOKEN + ")([\"']?)");
+                    + NETWORK_ENDPOINT_PATTERN_PART + ")([\"']?)");
     private static final Pattern CONNECTION_NETWORK_ENDPOINT_PATTERN = Pattern.compile(
             "(?i)(\\b(?:failed to connect to|connect(?:ed)? to|connection to|from)\\s+)("
-                    + NETWORK_ENDPOINT_TOKEN + ")");
+                    + NETWORK_ENDPOINT_PATTERN_PART + ")");
     private static final Pattern ABSOLUTE_PATH_PATTERN = Pattern.compile(
             "(?:(?<=^)|(?<=[\\s=:(\\[]))(?:/[^\\s]+|[A-Za-z]:\\\\[^\\s]+)");
 

@@ -34,7 +34,6 @@ public class DwdCapWarningSource implements SourceAdapter {
     private final DwdCapNormalizer normalizer;
     private final CacheStore cacheStore;
     private final SourceClock sourceClock;
-    private final String feedUrl;
     private final SourceRefreshFinalizer refreshFinalizer;
     private final WarningDedupPolicy dedupPolicy = new WarningDedupPolicy();
 
@@ -45,9 +44,8 @@ public class DwdCapWarningSource implements SourceAdapter {
             DwdCapParser parser,
             DwdCapNormalizer normalizer,
             CacheStore cacheStore,
-            SourceClock sourceClock,
-            String feedUrl) {
-        this(zipFetcher, parser, normalizer, cacheStore, sourceClock, feedUrl, new DataAgeService());
+            SourceClock sourceClock) {
+        this(zipFetcher, parser, normalizer, cacheStore, sourceClock, new DataAgeService());
     }
 
     DwdCapWarningSource(
@@ -56,19 +54,17 @@ public class DwdCapWarningSource implements SourceAdapter {
             DwdCapNormalizer normalizer,
             CacheStore cacheStore,
             SourceClock sourceClock,
-            String feedUrl,
             DataAgeService dataAgeService) {
         this.zipFetcher = zipFetcher;
         this.parser = parser;
         this.normalizer = normalizer;
         this.cacheStore = cacheStore;
         this.sourceClock = sourceClock;
-        this.feedUrl = feedUrl;
         this.refreshFinalizer = new SourceRefreshFinalizer(cacheStore, dataAgeService);
     }
 
     public String getFeedUrl() {
-        return feedUrl;
+        return zipFetcher == null ? null : zipFetcher.getRequestUrl();
     }
 
     public WarningSnapshot loadFromCache() {
@@ -88,7 +84,7 @@ public class DwdCapWarningSource implements SourceAdapter {
     public SourceRefreshResult refresh() {
         try {
             long now = sourceClock.nowMs();
-            SafeLayerDebugLog.i(TAG, "refresh-start feedUrl=" + feedUrl);
+            SafeLayerDebugLog.i(TAG, "refresh-start feedUrl=" + getFeedUrl());
             ParsedFeed parsedFeed = parseFetchedArchive();
             PreparedRefresh preparedRefresh = prepareRefresh(now, parsedFeed);
             logRefreshSummary(preparedRefresh);
@@ -107,7 +103,7 @@ public class DwdCapWarningSource implements SourceAdapter {
             return result;
         } catch (Exception exception) {
             logError("Failed to refresh DWD warnings.", exception);
-            SafeLayerDebugLog.e(TAG, "refresh-failed feedUrl=" + feedUrl, exception);
+            SafeLayerDebugLog.e(TAG, "refresh-failed feedUrl=" + getFeedUrl(), exception);
             SourceRefreshResult result = refreshFinalizer.finalizeWarningRefresh(
                     SourceIdentity.DWD,
                     null,
@@ -121,7 +117,7 @@ public class DwdCapWarningSource implements SourceAdapter {
     }
 
     private ParsedFeed parseFetchedArchive() throws IOException {
-        DwdCapZipFetcher.FetchResult fetchResult = zipFetcher.fetch(feedUrl);
+        DwdCapZipFetcher.FetchResult fetchResult = zipFetcher.fetch();
         List<String> failureMessages = new ArrayList<>(fetchResult.getFailures());
         boolean hadPartialFailure = fetchResult.hasFailures();
         List<DwdCapParser.ParsedAlert> parsedAlerts = new ArrayList<>();

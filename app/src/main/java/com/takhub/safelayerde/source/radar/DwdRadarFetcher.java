@@ -1,6 +1,7 @@
 package com.takhub.safelayerde.source.radar;
 
 import com.takhub.safelayerde.debug.SafeLayerDebugLog;
+import com.takhub.safelayerde.plugin.SafeLayerConstants;
 import com.takhub.safelayerde.source.common.HttpClient;
 import com.takhub.safelayerde.util.StringUtils;
 
@@ -42,6 +43,7 @@ public class DwdRadarFetcher {
             "yyyy-MM-dd'T'HH:mm:ssX",
             "yyyy-MM-dd'T'HH:mmX"
     };
+    private static final int MAX_REMOTE_FETCH_ATTEMPTS = 3;
 
     private final HttpClient httpClient;
 
@@ -57,7 +59,7 @@ public class DwdRadarFetcher {
         String productId = product.getProductId();
         SafeLayerDebugLog.i(TAG, "capabilities-fetch-start productId=" + productId);
         try {
-            String capabilitiesXml = httpClient.fetchString(product.getCapabilitiesUrl());
+            String capabilitiesXml = fetchCapabilitiesXml(product);
             CapabilitiesMetadata metadata = parseCapabilities(capabilitiesXml, product);
             SafeLayerDebugLog.i(TAG, "capabilities-fetch-success productId=" + productId
                     + ", layer=" + metadata.layerName
@@ -67,7 +69,7 @@ public class DwdRadarFetcher {
             String requestUrl = buildGetMapUrl(product, metadata);
             SafeLayerDebugLog.i(TAG, "getmap-request-start productId=" + productId
                     + ", frameEpochMs=" + metadata.frameEpochMs);
-            byte[] imageBytes = httpClient.fetchBytes(requestUrl);
+            byte[] imageBytes = fetchRadarImageBytes(product, requestUrl);
             SafeLayerDebugLog.i(TAG, "getmap-request-success productId=" + productId
                     + ", frameEpochMs=" + metadata.frameEpochMs
                     + ", bytes=" + imageBytes.length);
@@ -88,18 +90,49 @@ public class DwdRadarFetcher {
         }
     }
 
+    private String fetchCapabilitiesXml(DwdRadarProduct product) throws IOException {
+        IOException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_REMOTE_FETCH_ATTEMPTS; attempt++) {
+            try {
+                return httpClient.fetchString(
+                        SafeLayerConstants.DWD_WMS_ENDPOINT.request(product.getCapabilitiesUrl()));
+            } catch (IOException exception) {
+                lastFailure = exception;
+                logRetry("capabilities", product, attempt, exception);
+            }
+        }
+        throw lastFailure == null ? new IOException("Radar capabilities fetch failed.") : lastFailure;
+    }
+
+    private byte[] fetchRadarImageBytes(DwdRadarProduct product, String requestUrl) throws IOException {
+        IOException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_REMOTE_FETCH_ATTEMPTS; attempt++) {
+            try {
+                return httpClient.fetchBytes(
+                        SafeLayerConstants.DWD_WMS_ENDPOINT.request(requestUrl));
+            } catch (IOException exception) {
+                lastFailure = exception;
+                logRetry("image", product, attempt, exception);
+            }
+        }
+        throw lastFailure == null ? new IOException("Radar image fetch failed.") : lastFailure;
+    }
+
+    private void logRetry(String stage, DwdRadarProduct product, int attempt, IOException exception) {
+        if (attempt >= MAX_REMOTE_FETCH_ATTEMPTS) {
+            return;
+        }
+        SafeLayerDebugLog.w(TAG, "retry stage=" + stage
+                + ", productId=" + (product == null ? "unknown" : product.getProductId())
+                + ", attempt=" + attempt
+                + ", reason=" + (exception == null ? "unknown" : exception.getMessage()));
+    }
+
     private CapabilitiesMetadata parseCapabilities(String capabilitiesXml, DwdRadarProduct product) throws IOException {
         try {
             rejectUnsafeXmlConstructs(capabilitiesXml);
             DocumentBuilderFactory factory = newDocumentBuilderFactory();
-            factory.setNamespaceAware(true);
-            trySetXIncludeAware(factory, false);
-            factory.setExpandEntityReferences(false);
-            requireFeature(factory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
-            requireFeature(factory, DISALLOW_DOCTYPE_FEATURE, true);
-            requireFeature(factory, EXTERNAL_GENERAL_ENTITIES_FEATURE, false);
-            requireFeature(factory, EXTERNAL_PARAMETER_ENTITIES_FEATURE, false);
-            requireFeature(factory, LOAD_EXTERNAL_DTD_FEATURE, false);
+            configureSecureParsing(factory);
 
             DocumentBuilder documentBuilder = factory.newDocumentBuilder();
             documentBuilder.setEntityResolver(new org.xml.sax.EntityResolver() {
@@ -157,10 +190,15 @@ public class DwdRadarFetcher {
         return DocumentBuilderFactory.newInstance();
     }
 
-    private void requireFeature(DocumentBuilderFactory factory, String feature, boolean value) throws IOException {
-        if (!trySetFeature(factory, feature, value)) {
-            throw new IOException("Secure XML parser feature unavailable: " + feature);
-        }
+    private void configureSecureParsing(DocumentBuilderFactory factory) {
+        factory.setNamespaceAware(true);
+        trySetXIncludeAware(factory, false);
+        factory.setExpandEntityReferences(false);
+        trySetFeature(factory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        trySetFeature(factory, DISALLOW_DOCTYPE_FEATURE, true);
+        trySetFeature(factory, EXTERNAL_GENERAL_ENTITIES_FEATURE, false);
+        trySetFeature(factory, EXTERNAL_PARAMETER_ENTITIES_FEATURE, false);
+        trySetFeature(factory, LOAD_EXTERNAL_DTD_FEATURE, false);
     }
 
     protected boolean trySetFeature(DocumentBuilderFactory factory, String feature, boolean value) {
